@@ -280,6 +280,31 @@
     margin-bottom:9px; text-transform:uppercase;
   }
   .trim-value{font-size:11px; color:var(--brass-bright); float:right;}
+  .trim-value.val-pos{color:var(--phosphor);}
+  .trim-value.val-neg{color:var(--peak);}
+  .knob-value.val-pos{color:var(--phosphor);}
+  .knob-value.val-neg{color:var(--peak);}
+
+  /* manual numeric entry paired with a slider */
+  .value-input-row{display:flex; align-items:center; gap:8px;}
+  .value-input-row input[type="range"]{flex:1 1 auto;}
+  .value-input{
+    width:64px; flex:none; text-align:center;
+    background:var(--bg-panel-raised); border:1px solid var(--line); color:var(--cream);
+    border-radius:7px; padding:6px 4px; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; font-variant-numeric:tabular-nums;
+  }
+  .value-input:focus{outline:2px solid var(--brass-bright); outline-offset:1px;}
+  .value-input.val-pos{color:var(--phosphor); border-color:var(--phosphor-dim);}
+  .value-input.val-neg{color:var(--peak); border-color:rgba(242,89,74,.35);}
+  /* hide native spinner arrows so the input reads cleanly next to the slider */
+  .value-input::-webkit-outer-spin-button, .value-input::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  /* the editable number box is now the single source of truth for these values —
+     the old label readout stays in the DOM (other code still updates it) but is hidden */
+  #inputVal, #outputVal, #pitchFxAmountVal{display:none;}
+  .value-unit{font-size:11px; color:var(--cream-dim); flex:none;}
 
   .knob-row{display:flex; gap:28px; flex-wrap:wrap; justify-content:space-around;}
   .knob-control{display:flex; flex-direction:column; align-items:center; gap:10px;}
@@ -664,11 +689,30 @@
     <div class="trim-row">
       <div class="trim-control">
         <label>Input gain<span class="trim-value" id="inputVal">0.0 dB</span></label>
-        <input type="range" id="inputTrim" min="-24" max="24" step="0.1" value="0" aria-label="Input gain in decibels">
+        <div class="value-input-row">
+          <input type="range" id="inputTrim" min="-24" max="24" step="0.1" value="0" aria-label="Input gain in decibels">
+          <input type="number" class="value-input" id="inputTrimNum" min="-24" max="24" step="0.1" value="0.0" aria-label="Input gain in decibels, manual entry">
+          <span class="value-unit">dB</span>
+        </div>
       </div>
       <button class="reset-btn" id="autoInputBtn" type="button" aria-label="Auto-detect input gain from the loaded track">Auto</button>
     </div>
     <p class="hint-text" id="inputAutoStatus">Auto analyzes the loaded source and suggests a starting gain so it reaches the chain at a consistent level.</p>
+  </section>
+
+  <section class="panel" id="pitchFxPanel">
+    <p class="section-label">Pitch<span class="info-icon" tabindex="0" role="button" aria-label="About Pitch" aria-expanded="false">i<span class="info-tip">Shifts the whole track up or down. Web Audio ties speed and pitch together on a buffer source, so this changes playback speed too — it's for preview/character purposes and isn't baked into an exported file.</span></span></p>
+    <div class="trim-row">
+      <div class="trim-control">
+        <label>Pitch<span class="trim-value" id="pitchFxAmountVal">1.000x</span></label>
+        <div class="value-input-row">
+          <input type="range" id="pitchFxAmount" min="0.5" max="2.0" step="0.001" value="1.0">
+          <input type="number" class="value-input" id="pitchFxAmountNum" min="0.5" max="2.0" step="0.001" value="1.000" aria-label="Pitch as a decimal multiplier">
+          <span class="value-unit">x</span>
+        </div>
+      </div>
+      <button class="reset-btn" id="pitchFxResetBtn" type="button" aria-label="Reset pitch to normal">Reset</button>
+    </div>
   </section>
 
   <div class="workflow-grid">
@@ -722,7 +766,11 @@
     <div class="trim-row">
       <div class="trim-control">
         <label>Output trim<span class="info-icon" tabindex="0" role="button" aria-label="What does Output trim do?" aria-expanded="false">i<span class="info-tip">Turns the overall level up or down before the limiter, in decibels. Use this to compensate if a preset sounds too quiet or too hot.</span></span> <span class="trim-value" id="outputVal">0.0 dB</span></label>
-        <input type="range" id="outputTrim" min="-6" max="6" step="0.1" value="0">
+        <div class="value-input-row">
+          <input type="range" id="outputTrim" min="-6" max="6" step="0.1" value="0">
+          <input type="number" class="value-input" id="outputTrimNum" min="-6" max="6" step="0.1" value="0.0" aria-label="Output trim in decibels, manual entry">
+          <span class="value-unit">dB</span>
+        </div>
       </div>
       <div class="trim-control">
         <label>Ambience<span class="info-icon" tabindex="0" role="button" aria-label="What does Ambience do?" aria-expanded="false">i<span class="info-tip">Adds a touch of generated reverb/space to the mix. 0% is fully dry (no added space) — raise it for a bigger, more ambient feel.</span></span> <span class="trim-value" id="ambienceVal">0%</span></label>
@@ -1408,9 +1456,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
   const processingSummary = document.getElementById("processingSummary");
   const widthTrim  = document.getElementById("widthTrim");
   const outputTrim = document.getElementById("outputTrim");
+  const outputTrimNum = document.getElementById("outputTrimNum");
   const widthVal   = document.getElementById("widthVal");
   const outputVal  = document.getElementById("outputVal");
   const inputTrim  = document.getElementById("inputTrim");
+  const inputTrimNum = document.getElementById("inputTrimNum");
   const inputVal   = document.getElementById("inputVal");
   const autoInputBtn = document.getElementById("autoInputBtn");
   const inputAutoStatus = document.getElementById("inputAutoStatus");
@@ -1440,6 +1490,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
   const cancelBatchBtn = document.getElementById("cancelBatchBtn");
   const abBtn = document.getElementById("abBtn");
   const abMatchBtn = document.getElementById("abMatchBtn");
+  const pitchFxAmount = document.getElementById("pitchFxAmount");
+  const pitchFxAmountNum = document.getElementById("pitchFxAmountNum");
+  const pitchFxAmountVal = document.getElementById("pitchFxAmountVal");
+  const pitchFxResetBtn = document.getElementById("pitchFxResetBtn");
   const ambienceTrim = document.getElementById("ambienceTrim");
   const ambienceVal  = document.getElementById("ambienceVal");
   const ceilingTrim  = document.getElementById("ceilingTrim");
@@ -1602,6 +1656,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
   let trimEnd = 0;            // seconds
   let isDraggingTrim = null;  // "start" | "end" | null
   let abOriginal = false;     // A/B compare: true = monitoring the untouched original
+  let pitchFxAmountVal_ = 1.0;  // playbackRate for the whole track — simple up/down pitch shift
   let abMatchEnabled = true;
 
   let contextReadyPromise = null;
@@ -2065,6 +2120,55 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     updateABLabels();
     applyLiveChain();
   });
+  function applyPitchFxLive(){
+    // Applied for the full duration of whatever's currently playing — the
+    // whole track shifts, not just a segment.
+    if(isPlaying && sourceNode && audioCtx){
+      sourceNode.playbackRate.cancelScheduledValues(audioCtx.currentTime);
+      sourceNode.playbackRate.setValueAtTime(pitchFxAmountVal_, audioCtx.currentTime);
+    }
+  }
+
+  function setPitchDisplay(v){
+    pitchFxAmountVal.textContent = v.toFixed(3) + "x";
+    pitchFxAmountVal.classList.toggle("val-pos", v>1.0);
+    pitchFxAmountVal.classList.toggle("val-neg", v<1.0);
+    pitchFxAmountNum.classList.toggle("val-pos", v>1.0);
+    pitchFxAmountNum.classList.toggle("val-neg", v<1.0);
+  }
+  function setDbDisplay(labelEl, numEl, v){
+    labelEl.textContent = v.toFixed(1) + " dB";
+    labelEl.classList.toggle("val-pos", v>0);
+    labelEl.classList.toggle("val-neg", v<0);
+    numEl.classList.toggle("val-pos", v>0);
+    numEl.classList.toggle("val-neg", v<0);
+  }
+
+  pitchFxAmount.addEventListener("input", ()=>{
+    pitchFxAmountVal_ = parseFloat(pitchFxAmount.value);
+    pitchFxAmountNum.value = pitchFxAmountVal_.toFixed(3);
+    setPitchDisplay(pitchFxAmountVal_);
+    applyPitchFxLive();
+  });
+  pitchFxAmountNum.addEventListener("change", ()=>{
+    const min = Number(pitchFxAmount.min), max = Number(pitchFxAmount.max);
+    let v = parseFloat(pitchFxAmountNum.value);
+    if(!Number.isFinite(v)) v = pitchFxAmountVal_;
+    v = Math.max(min, Math.min(max, v));
+    pitchFxAmountVal_ = v;
+    pitchFxAmount.value = String(v);
+    pitchFxAmountNum.value = v.toFixed(3);
+    setPitchDisplay(v);
+    applyPitchFxLive();
+  });
+
+  pitchFxResetBtn.addEventListener("click", ()=>{
+    pitchFxAmountVal_ = 1.0;
+    pitchFxAmount.value = "1.0";
+    pitchFxAmountNum.value = "1.000";
+    setPitchDisplay(1.0);
+    applyPitchFxLive();
+  });
   updateABLabels();
 
 
@@ -2073,11 +2177,35 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     applyLiveChain();
   });
   outputTrim.addEventListener("input", ()=>{
-    outputVal.textContent = Number(outputTrim.value).toFixed(1) + " dB";
+    const v = Number(outputTrim.value);
+    outputTrimNum.value = v.toFixed(1);
+    setDbDisplay(outputVal, outputTrimNum, v);
+    applyLiveChain();
+  });
+  outputTrimNum.addEventListener("change", ()=>{
+    const min = Number(outputTrim.min), max = Number(outputTrim.max);
+    let v = parseFloat(outputTrimNum.value);
+    if(!Number.isFinite(v)) v = Number(outputTrim.value);
+    v = Math.max(min, Math.min(max, v));
+    outputTrim.value = String(v);
+    outputTrimNum.value = v.toFixed(1);
+    setDbDisplay(outputVal, outputTrimNum, v);
     applyLiveChain();
   });
   inputTrim.addEventListener("input", ()=>{
-    inputVal.textContent = Number(inputTrim.value).toFixed(1) + " dB";
+    const v = Number(inputTrim.value);
+    inputTrimNum.value = v.toFixed(1);
+    setDbDisplay(inputVal, inputTrimNum, v);
+    applyLiveChain();
+  });
+  inputTrimNum.addEventListener("change", ()=>{
+    const min = Number(inputTrim.min), max = Number(inputTrim.max);
+    let v = parseFloat(inputTrimNum.value);
+    if(!Number.isFinite(v)) v = Number(inputTrim.value);
+    v = Math.max(min, Math.min(max, v));
+    inputTrim.value = String(v);
+    inputTrimNum.value = v.toFixed(1);
+    setDbDisplay(inputVal, inputTrimNum, v);
     applyLiveChain();
   });
 
@@ -2107,7 +2235,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
       const min = Number(inputTrim.min), max = Number(inputTrim.max);
       suggested = Math.round(Math.max(min, Math.min(max, suggested)) * 10) / 10;
       inputTrim.value = String(suggested);
-      inputVal.textContent = suggested.toFixed(1) + " dB";
+      inputTrimNum.value = suggested.toFixed(1);
+      setDbDisplay(inputVal, inputTrimNum, suggested);
       applyLiveChain();
       const lufsText = isFinite(integrated) ? integrated.toFixed(1) + " LUFS" : "near-silent";
       inputAutoStatus.textContent = "Source measured " + lufsText + ", peak " + peakDb.toFixed(1) + " dBTP — gain set to " + (suggested>0?"+":"") + suggested.toFixed(1) + " dB.";
@@ -2173,6 +2302,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
       const deg = -135 + frac*270;
       indicator.style.transform = "translateX(-50%) rotate(" + deg + "deg)";
       valueEl.textContent = (value>0?"+":"") + value.toFixed(0) + " dB";
+      valueEl.classList.toggle("val-pos", value>0);
+      valueEl.classList.toggle("val-neg", value<0);
       el.setAttribute("aria-valuenow", value.toFixed(0));
       eqState[key] = value;
       applyLiveChain();
@@ -2217,8 +2348,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     knobHighControl.setValue(0);
 
     widthTrim.value = "100";       widthVal.textContent = "100%";
-    outputTrim.value = "0";        outputVal.textContent = "0.0 dB";
-    inputTrim.value = "0";         inputVal.textContent = "0.0 dB";
+    outputTrim.value = "0";        outputTrimNum.value = "0.0"; setDbDisplay(outputVal, outputTrimNum, 0);
+    inputTrim.value = "0";         inputTrimNum.value = "0.0"; setDbDisplay(inputVal, inputTrimNum, 0);
+    pitchFxAmountVal_ = 1.0;       pitchFxAmount.value = "1.0"; pitchFxAmountNum.value = "1.000"; setPitchDisplay(1.0);
     ambienceTrim.value = "0";      ambienceVal.textContent = "0%";
     ceilingTrim.value = "-1";      ceilingVal.textContent = "-1.0 dBTP";
     ceilingMarginTrim.value = "0.3"; ceilingMarginVal.textContent = "0.3 dB";
@@ -2302,7 +2434,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         stemsBtn.disabled = false;
         autoRecommendBtn.disabled = false;
         recommendationStatus.textContent = "Track loaded. Auto Recommend offers a conservative source-aware start; set delivery manually for a known destination.";
-        inputTrim.value = "0"; inputVal.textContent = "0.0 dB";
+        inputTrim.value = "0"; inputTrimNum.value = "0.0"; setDbDisplay(inputVal, inputTrimNum, 0);
         applyLiveChain();
         detectInputGain();
       }).catch(err=>{
@@ -2394,6 +2526,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     stopSource();
     sourceNode = audioCtx.createBufferSource();
     sourceNode.buffer = audioBuffer;
+    // Simple whole-track pitch shift: applies for the entire play, from
+    // wherever playback starts (fresh start or mid-track seek/resume alike).
+    sourceNode.playbackRate.setValueAtTime(pitchFxAmountVal_, audioCtx.currentTime);
     sourceNode.connect(chain.input); // fans out internally to both the wet chain and the dry tap, gain-staged once
     sourceNode.onended = ()=>{
       if(isPlaying){
